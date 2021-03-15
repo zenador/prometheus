@@ -1130,6 +1130,146 @@ func (ev *evaluator) rangeEval(prepSeries func(labels.Labels, *EvalSeriesHelper)
 	return mat, warnings
 }
 
+// TODO in this experiment, the checking of ev.currentSamples is currently skipped (but easy to do).
+func (ev *evaluator) rangeEvalSum(grouping []string, without bool, exprs ...parser.Expr) (Matrix, storage.Warnings) {
+	numSteps := int((ev.endTimestamp-ev.startTimestamp)/ev.interval) + 1
+	matrixes := make([]Matrix, len(exprs))
+	origMatrixes := make([]Matrix, len(exprs))
+	originalNumSamples := ev.currentSamples
+
+	var warnings storage.Warnings
+	for i, e := range exprs {
+		// Functions will take string arguments from the expressions, not the values.
+		if e != nil && e.Type() != parser.ValueTypeString {
+			// ev.currentSamples will be updated to the correct value within the ev.eval call.
+			val, ws := ev.eval(e)
+			warnings = append(warnings, ws...)
+			matrixes[i] = val.(Matrix)
+
+			// Keep a copy of the original point slices so that they
+			// can be returned to the pool.
+			origMatrixes[i] = make(Matrix, len(matrixes[i]))
+			copy(origMatrixes[i], matrixes[i])
+		}
+	}
+
+	vectors := make([]Vector, len(exprs)) // Input vectors for the function.
+	// Create an output vector that is as big as the input matrix with
+	// the most time series.
+	biggestLen := 1
+	for i := range exprs {
+		vectors[i] = make(Vector, 0, len(matrixes[i]))
+		if len(matrixes[i]) > biggestLen {
+			biggestLen = len(matrixes[i])
+		}
+	}
+	seriess := make(map[uint64]Series, biggestLen) // Output series by series hash.
+
+	// The aggregation expects only 1 expression.
+	if len(exprs) != 1 {
+		ev.error(fmt.Errorf("unexpected number of expressions (actual: %d)", len(exprs)))
+	}
+
+	lb := labels.NewBuilder(nil)
+	var buf []byte
+
+	for _, series := range matrixes[0] {
+		metric := series.Metric
+
+		// Compute the grouping key.
+		var groupingKey uint64
+		groupingKey, buf = generateGroupingKey(series.Metric, grouping, without, buf)
+
+		out, ok := seriess[groupingKey]
+
+		// Initialise a new resulting series.
+		if !ok {
+			var groupingMetric labels.Labels
+
+			if without {
+				lb.Reset(metric)
+				lb.Del(grouping...)
+				lb.Del(labels.MetricName)
+				groupingMetric = lb.Labels()
+			} else {
+				groupingMetric = make(labels.Labels, 0, len(grouping))
+				for _, l := range metric {
+					for _, n := range grouping {
+						if l.Name == n {
+							groupingMetric = append(groupingMetric, l)
+							break
+						}
+					}
+				}
+				sort.Sort(groupingMetric)
+			}
+
+			// Initialize output points.
+			// TODO use getPointSlice() and then grow it if cap() is not enough.
+			// points := getPointSlice(numSteps)
+			// points = points[0:numSteps]
+			points := make([]Point, numSteps)
+			idx := 0
+
+			for ts := ev.startTimestamp; ts <= ev.endTimestamp; ts += ev.interval {
+				points[idx].T = ts
+
+				// Initialize to NaN to be able to find out which points have not been
+				// used at all at the end of the series iteration.
+				points[idx].V = math.NaN()
+				idx++
+			}
+
+			out = Series{
+				Metric: groupingMetric,
+				Points: points,
+			}
+			seriess[groupingKey] = out
+		}
+
+		// Sum the series points to the resulting output series.
+		outIdx := 0
+		for _, point := range series.Points {
+			// Advance the output index until we hit the point with the same timestamp.
+			for out.Points[outIdx].T != point.T {
+				outIdx++
+			}
+
+			// Sum aggregation.
+			if math.IsNaN(out.Points[outIdx].V) {
+				out.Points[outIdx].V = point.V
+			} else {
+				out.Points[outIdx].V += point.V
+			}
+		}
+	}
+
+	// Filter out NaN points.
+	for _, series := range seriess {
+		filtered := getPointSlice(len(series.Points))
+		for _, point := range series.Points {
+			if !math.IsNaN(point.V) {
+				filtered = append(filtered, point)
+			}
+		}
+		series.Points = filtered
+	}
+
+	// Reuse the original point slices.
+	for _, m := range origMatrixes {
+		for _, s := range m {
+			putPointSlice(s.Points)
+		}
+	}
+	// Assemble the output matrix. By the time we get here we know we don't have too many samples.
+	mat := make(Matrix, 0, len(seriess))
+	for _, ss := range seriess {
+		mat = append(mat, ss)
+	}
+	ev.currentSamples = originalNumSamples + mat.TotalSamples()
+	return mat, warnings
+}
+
 // evalSubquery evaluates given SubqueryExpr and returns an equivalent
 // evaluated MatrixSelector in its place. Note that the Name and LabelMatchers are not set.
 func (ev *evaluator) evalSubquery(subq *parser.SubqueryExpr) (*parser.MatrixSelector, int, storage.Warnings) {
@@ -1177,6 +1317,11 @@ func (ev *evaluator) eval(expr parser.Expr) (parser.Value, storage.Warnings) {
 		buf := make([]byte, 0, 1024)
 		initSeries := func(series labels.Labels, h *EvalSeriesHelper) {
 			h.groupingKey, buf = generateGroupingKey(series, sortedGrouping, e.Without, buf)
+		}
+
+		// Experiment to optimize the SUM aggregation.
+		if e.Op == parser.SUM {
+			return ev.rangeEvalSum(sortedGrouping, e.Without, e.Expr)
 		}
 
 		unwrapParenExpr(&e.Param)
@@ -2351,6 +2496,62 @@ func (ev *evaluator) aggregation(op parser.ItemType, grouping []string, without 
 			// For other aggregations, we already have the right value.
 		}
 
+		enh.Out = append(enh.Out, Sample{
+			Metric: aggr.labels,
+			Point:  Point{V: aggr.value},
+		})
+	}
+	return enh.Out
+}
+
+// aggregation evaluates an aggregation operation on a Vector. The provided grouping labels
+// must be sorted.
+func (ev *evaluator) aggregationSum(op parser.ItemType, grouping []string, without bool, param interface{}, vec Vector, seriesHelper []EvalSeriesHelper, enh *EvalNodeHelper) Vector {
+	result := map[uint64]*groupedAggregation{}
+	lb := labels.NewBuilder(nil)
+
+	for si, s := range vec {
+		metric := s.Metric
+
+		// We can use the pre-computed grouping key unless grouping labels have changed.
+		groupingKey := seriesHelper[si].groupingKey
+
+		group, ok := result[groupingKey]
+		// Add a new group if it doesn't exist.
+		if !ok {
+			var m labels.Labels
+
+			if without {
+				lb.Reset(metric)
+				lb.Del(grouping...)
+				lb.Del(labels.MetricName)
+				m = lb.Labels()
+			} else {
+				m = make(labels.Labels, 0, len(grouping))
+				for _, l := range metric {
+					for _, n := range grouping {
+						if l.Name == n {
+							m = append(m, l)
+							break
+						}
+					}
+				}
+				sort.Sort(m)
+			}
+			result[groupingKey] = &groupedAggregation{
+				labels:     m,
+				value:      s.V,
+				mean:       s.V,
+				groupCount: 1,
+			}
+			continue
+		}
+
+		group.value += s.V
+	}
+
+	// Construct the result Vector from the aggregated groups.
+	for _, aggr := range result {
 		enh.Out = append(enh.Out, Sample{
 			Metric: aggr.labels,
 			Point:  Point{V: aggr.value},

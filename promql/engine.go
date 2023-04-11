@@ -1320,7 +1320,8 @@ func (ev *evaluator) eval(expr parser.Expr) (parser.Value, storage.Warnings) {
 						vs.Offset = time.Duration(enh.Ts-*vs.Timestamp) * time.Millisecond
 					}
 					val, ws := ev.vectorSelector(vs, enh.Ts)
-					return call([]parser.Value{val}, e.Args, enh), ws
+					vec, notes := call([]parser.Value{val}, e.Args, enh)
+					return vec, append(ws, notes.warnings...)
 				})
 			}
 		}
@@ -1359,7 +1360,8 @@ func (ev *evaluator) eval(expr parser.Expr) (parser.Value, storage.Warnings) {
 		if !matrixArg {
 			// Does not have a matrix argument.
 			return ev.rangeEval(nil, func(v []parser.Value, _ [][]EvalSeriesHelper, enh *EvalNodeHelper) (Vector, storage.Warnings) {
-				return call(v, e.Args, enh), warnings
+				vec, notes := call(v, e.Args, enh)
+				return vec, append(warnings, notes.warnings...)
 			}, e.Args...)
 		}
 
@@ -1441,7 +1443,8 @@ func (ev *evaluator) eval(expr parser.Expr) (parser.Value, storage.Warnings) {
 				inMatrix[0].Points = points
 				enh.Ts = ts
 				// Make the function call.
-				outVec := call(inArgs, e.Args, enh)
+				outVec, notes := call(inArgs, e.Args, enh)
+				warnings = append(warnings, notes.warnings...)
 				ev.samplesStats.IncrementSamplesAtStep(step, int64(len(points)))
 				enh.Out = outVec[:0]
 				if len(outVec) > 0 {

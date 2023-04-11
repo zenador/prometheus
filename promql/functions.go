@@ -539,6 +539,11 @@ func funcSumOverTime(vals []parser.Value, args parser.Expressions, enh *EvalNode
 func funcQuantileOverTime(vals []parser.Value, args parser.Expressions, enh *EvalNodeHelper) (Vector, Notes) {
 	q := vals[0].(Vector)[0].V
 	el := vals[1].(Matrix)[0]
+	notes := Notes{}
+
+	if math.IsNaN(q) || q < 0 || q > 1 {
+		notes.AddWarning("Quantile value should be between 0 and 1")
+	}
 
 	values := make(vectorByValueHeap, 0, len(el.Points))
 	for _, v := range el.Points {
@@ -546,7 +551,7 @@ func funcQuantileOverTime(vals []parser.Value, args parser.Expressions, enh *Eva
 	}
 	return append(enh.Out, Sample{
 		Point: Point{V: quantile(q, values)},
-	}), Notes{}
+	}), notes
 }
 
 // === stddev_over_time(Matrix parser.ValueTypeMatrix) Vector ===
@@ -927,6 +932,10 @@ func funcHistogramQuantile(vals []parser.Value, args parser.Expressions, enh *Ev
 	inVec := vals[1].(Vector)
 	notes := Notes{}
 
+	if math.IsNaN(q) || q < 0 || q > 1 {
+		notes.AddWarning("Quantile value should be between 0 and 1")
+	}
+
 	if enh.signatureToMetricWithBuckets == nil {
 		enh.signatureToMetricWithBuckets = map[string]*metricWithBuckets{}
 	} else {
@@ -949,8 +958,7 @@ func funcHistogramQuantile(vals []parser.Value, args parser.Expressions, enh *Ev
 			sample.Metric.Get(model.BucketLabel), 64,
 		)
 		if err != nil {
-			// Oops, no bucket label or malformed label value. Skip.
-			notes.AddWarningErr(err)
+			notes.AddWarning("No bucket label or malformed label value")
 			continue
 		}
 		enh.lblBuf = sample.Metric.BytesWithoutLabels(enh.lblBuf, labels.BucketLabel)

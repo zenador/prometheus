@@ -1291,7 +1291,8 @@ func (ev *evaluator) eval(expr parser.Expr) (parser.Value, notes.Warnings) {
 		unwrapParenExpr(&param)
 		if s, ok := param.(*parser.StringLiteral); ok {
 			return ev.rangeEval(initSeries, func(v []parser.Value, sh [][]EvalSeriesHelper, enh *EvalNodeHelper) (Vector, notes.Warnings) {
-				return ev.aggregation(e.Op, sortedGrouping, e.Without, s.Val, v[0].(Vector), sh[0], enh), nil
+				vec, notes := ev.aggregation(e.Op, sortedGrouping, e.Without, s.Val, v[0].(Vector), sh[0], enh)
+				return vec, notes.warnings
 			}, e.Expr)
 		}
 
@@ -1300,7 +1301,8 @@ func (ev *evaluator) eval(expr parser.Expr) (parser.Value, notes.Warnings) {
 			if e.Param != nil {
 				param = v[0].(Vector)[0].V
 			}
-			return ev.aggregation(e.Op, sortedGrouping, e.Without, param, v[1].(Vector), sh[1], enh), nil
+			vec, notes := ev.aggregation(e.Op, sortedGrouping, e.Without, param, v[1].(Vector), sh[1], enh)
+			return vec, notes.warnings
 		}, e.Param, e.Expr)
 
 	case *parser.Call:
@@ -2327,7 +2329,8 @@ type groupedAggregation struct {
 
 // aggregation evaluates an aggregation operation on a Vector. The provided grouping labels
 // must be sorted.
-func (ev *evaluator) aggregation(op parser.ItemType, grouping []string, without bool, param interface{}, vec Vector, seriesHelper []EvalSeriesHelper, enh *EvalNodeHelper) Vector {
+func (ev *evaluator) aggregation(op parser.ItemType, grouping []string, without bool, param interface{}, vec Vector, seriesHelper []EvalSeriesHelper, enh *EvalNodeHelper) (Vector, Notes) {
+	notes := Notes{}
 	result := map[uint64]*groupedAggregation{}
 	orderedResult := []*groupedAggregation{}
 	var k int64
@@ -2338,7 +2341,7 @@ func (ev *evaluator) aggregation(op parser.ItemType, grouping []string, without 
 		}
 		k = int64(f)
 		if k < 1 {
-			return Vector{}
+			return Vector{}, notes
 		}
 	}
 	var q float64
@@ -2596,6 +2599,9 @@ func (ev *evaluator) aggregation(op parser.ItemType, grouping []string, without 
 			continue // Bypass default append.
 
 		case parser.QUANTILE:
+			if math.IsNaN(q) || q < 0 || q > 1 {
+				notes.AddWarning("Quantile value should be between 0 and 1")
+			}
 			aggr.value = quantile(q, aggr.heap)
 
 		case parser.SUM:
@@ -2612,7 +2618,7 @@ func (ev *evaluator) aggregation(op parser.ItemType, grouping []string, without 
 			Point:  Point{V: aggr.value, H: aggr.histogramValue},
 		})
 	}
-	return enh.Out
+	return enh.Out, notes
 }
 
 // groupingKey builds and returns the grouping key for the given metric and

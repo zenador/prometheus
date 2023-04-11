@@ -2330,7 +2330,7 @@ type groupedAggregation struct {
 // aggregation evaluates an aggregation operation on a Vector. The provided grouping labels
 // must be sorted.
 func (ev *evaluator) aggregation(op parser.ItemType, grouping []string, without bool, param interface{}, vec Vector, seriesHelper []EvalSeriesHelper, enh *EvalNodeHelper) (Vector, Notes) {
-	notes := Notes{}
+	ns := Notes{}
 	result := map[uint64]*groupedAggregation{}
 	orderedResult := []*groupedAggregation{}
 	var k int64
@@ -2341,7 +2341,7 @@ func (ev *evaluator) aggregation(op parser.ItemType, grouping []string, without 
 		}
 		k = int64(f)
 		if k < 1 {
-			return Vector{}, notes
+			return Vector{}, ns
 		}
 	}
 	var q float64
@@ -2600,7 +2600,7 @@ func (ev *evaluator) aggregation(op parser.ItemType, grouping []string, without 
 
 		case parser.QUANTILE:
 			if math.IsNaN(q) || q < 0 || q > 1 {
-				notes.AddWarning("Quantile value should be between 0 and 1")
+				ns.AddWarningErr(notes.InvalidQuantileWarning{Q: q})
 			}
 			aggr.value = quantile(q, aggr.heap)
 
@@ -2618,7 +2618,7 @@ func (ev *evaluator) aggregation(op parser.ItemType, grouping []string, without 
 			Point:  Point{V: aggr.value, H: aggr.histogramValue},
 		})
 	}
-	return enh.Out, notes
+	return enh.Out, ns
 }
 
 // groupingKey builds and returns the grouping key for the given metric and

@@ -35,7 +35,7 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/tsdb/chunks"
-	"github.com/prometheus/prometheus/util/notes"
+	"github.com/prometheus/prometheus/util/annotations"
 )
 
 // decodeReadLimit is the maximum size of a read request body in bytes.
@@ -115,7 +115,7 @@ func ToQuery(from, to int64, matchers []*labels.Matcher, hints *storage.SelectHi
 }
 
 // ToQueryResult builds a QueryResult proto.
-func ToQueryResult(ss storage.SeriesSet, sampleLimit int) (*prompb.QueryResult, notes.Warnings, error) {
+func ToQueryResult(ss storage.SeriesSet, sampleLimit int) (*prompb.QueryResult, annotations.Warnings, error) {
 	numSamples := 0
 	resp := &prompb.QueryResult{}
 	var iter chunkenc.Iterator
@@ -215,7 +215,7 @@ func StreamChunkedReadResponses(
 	sortedExternalLabels []prompb.Label,
 	maxBytesInFrame int,
 	marshalPool *sync.Pool,
-) (notes.Warnings, error) {
+) (annotations.Warnings, error) {
 	var (
 		chks []prompb.Chunk
 		lbls []prompb.Label
@@ -336,7 +336,7 @@ func (e errSeriesSet) Err() error {
 	return e.err
 }
 
-func (e errSeriesSet) Warnings() notes.Warnings { return nil }
+func (e errSeriesSet) Warnings() annotations.Warnings { return nil }
 
 // concreteSeriesSet implements storage.SeriesSet.
 type concreteSeriesSet struct {
@@ -357,7 +357,7 @@ func (c *concreteSeriesSet) Err() error {
 	return nil
 }
 
-func (c *concreteSeriesSet) Warnings() notes.Warnings { return nil }
+func (c *concreteSeriesSet) Warnings() annotations.Warnings { return nil }
 
 // concreteSeries implements storage.Series.
 type concreteSeries struct {

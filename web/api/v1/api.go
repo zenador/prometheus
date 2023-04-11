@@ -1580,8 +1580,14 @@ func (api *API) cleanTombstones(r *http.Request) apiFuncResult {
 func (api *API) respond(w http.ResponseWriter, data interface{}, warnings notes.Warnings) {
 	statusMessage := statusSuccess
 	var warningStrings []string
+	warningStringsMap := make(map[string]struct{})
 	for _, warning := range warnings {
-		warningStrings = append(warningStrings, warning.Error())
+		warningStr := warning.Error()
+		_, ok := warningStringsMap[warningStr]
+		if !ok {
+			warningStrings = append(warningStrings, warningStr)
+			warningStringsMap[warningStr] = struct{}{}
+		}
 	}
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&response{

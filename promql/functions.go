@@ -89,7 +89,8 @@ func extrapolatedRate(vals []parser.Value, args parser.Expressions, enh *EvalNod
 	}
 
 	if samples.Points[0].H != nil {
-		resultHistogram, newNs := histogramRate(samples.Points, isCounter)
+		var newNs notes.Notes
+		resultHistogram, newNs = histogramRate(samples.Points, isCounter)
 		if resultHistogram == nil {
 			ns.Merge(newNs)
 			return enh.Out, ns

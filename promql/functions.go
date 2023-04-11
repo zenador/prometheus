@@ -73,17 +73,25 @@ func extrapolatedRate(vals []parser.Value, args parser.Expressions, enh *EvalNod
 		rangeEnd        = enh.Ts - durationMilliseconds(vs.Offset)
 		resultValue     float64
 		resultHistogram *histogram.FloatHistogram
+		ns              = Notes{}
 	)
 
 	// No sense in trying to compute a rate without at least two points. Drop
 	// this Vector element.
 	if len(samples.Points) < 2 {
-		return enh.Out, CreateNotesWithWarningErr(notes.RangeTooSmallWarning{})
+		ns.AddWarningErr(notes.RangeTooSmallWarning{})
+		return enh.Out, ns
+	}
+
+	metricName := samples.Metric.Get(labels.MetricName)
+	if isCounter && !strings.HasSuffix(metricName, "_total") && !strings.HasSuffix(metricName, "_sum") && !strings.HasSuffix(metricName, "_count") {
+		ns.AddWarningErr(notes.PossibleNonCounterWarning{MetricName: metricName})
 	}
 
 	if samples.Points[0].H != nil {
-		resultHistogram, ns := histogramRate(samples.Points, isCounter)
+		resultHistogram, newNs := histogramRate(samples.Points, isCounter)
 		if resultHistogram == nil {
+			ns.Merge(newNs)
 			return enh.Out, ns
 		}
 	} else {
@@ -95,7 +103,8 @@ func extrapolatedRate(vals []parser.Value, args parser.Expressions, enh *EvalNod
 		// handing in a []FloatPoint and a []HistogramPoint separately.
 		for _, currPoint := range samples.Points[1:] {
 			if currPoint.H != nil {
-				return nil, Notes{} // Range contains a mix of histograms and floats.
+				ns.AddWarningErr(notes.MixedFloatsHistogramsWarning{})
+				return nil, ns
 			}
 			if !isCounter {
 				continue
@@ -158,7 +167,7 @@ func extrapolatedRate(vals []parser.Value, args parser.Expressions, enh *EvalNod
 
 	return append(enh.Out, Sample{
 		Point: Point{V: resultValue, H: resultHistogram},
-	}), Notes{}
+	}), ns
 }
 
 // histogramRate is a helper function for extrapolatedRate. It requires

@@ -191,6 +191,12 @@ var (
 		},
 		[]string{"scrape_job"},
 	)
+	targetScrapeNativeHistogramBucketLimit = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "prometheus_target_scrapes_histogram_exceeded_bucket_limit_total",
+			Help: "Total number of native histograms rejected due to exceeding the bucket limit.",
+		},
+	)
 )
 
 func init() {
@@ -216,6 +222,7 @@ func init() {
 		targetScrapeExemplarOutOfOrder,
 		targetScrapePoolExceededLabelLimits,
 		targetSyncFailed,
+		targetScrapeNativeHistogramBucketLimit,
 	)
 }
 
@@ -256,6 +263,7 @@ type scrapeLoopOptions struct {
 	target          *Target
 	scraper         scraper
 	sampleLimit     int
+	bucketLimit     int
 	labelLimits     *labelLimits
 	honorLabels     bool
 	honorTimestamps bool
@@ -319,6 +327,7 @@ func newScrapePool(cfg *config.ScrapeConfig, app storage.Appendable, jitterSeed 
 			jitterSeed,
 			opts.honorTimestamps,
 			opts.sampleLimit,
+			opts.bucketLimit,
 			opts.labelLimits,
 			opts.interval,
 			opts.timeout,
@@ -412,6 +421,7 @@ func (sp *scrapePool) reload(cfg *config.ScrapeConfig) error {
 		timeout       = time.Duration(sp.config.ScrapeTimeout)
 		bodySizeLimit = int64(sp.config.BodySizeLimit)
 		sampleLimit   = int(sp.config.SampleLimit)
+		bucketLimit   = int(sp.config.NativeHistogramBucketLimit)
 		labelLimits   = &labelLimits{
 			labelLimit:            int(sp.config.LabelLimit),
 			labelNameLengthLimit:  int(sp.config.LabelNameLengthLimit),
@@ -446,6 +456,7 @@ func (sp *scrapePool) reload(cfg *config.ScrapeConfig) error {
 				target:          t,
 				scraper:         s,
 				sampleLimit:     sampleLimit,
+				bucketLimit:     bucketLimit,
 				labelLimits:     labelLimits,
 				honorLabels:     honorLabels,
 				honorTimestamps: honorTimestamps,
@@ -529,6 +540,7 @@ func (sp *scrapePool) sync(targets []*Target) {
 		timeout       = time.Duration(sp.config.ScrapeTimeout)
 		bodySizeLimit = int64(sp.config.BodySizeLimit)
 		sampleLimit   = int(sp.config.SampleLimit)
+		bucketLimit   = int(sp.config.NativeHistogramBucketLimit)
 		labelLimits   = &labelLimits{
 			labelLimit:            int(sp.config.LabelLimit),
 			labelNameLengthLimit:  int(sp.config.LabelNameLengthLimit),
@@ -558,6 +570,7 @@ func (sp *scrapePool) sync(targets []*Target) {
 				target:          t,
 				scraper:         s,
 				sampleLimit:     sampleLimit,
+				bucketLimit:     bucketLimit,
 				labelLimits:     labelLimits,
 				honorLabels:     honorLabels,
 				honorTimestamps: honorTimestamps,
@@ -730,7 +743,7 @@ func mutateReportSampleLabels(lset labels.Labels, target *Target) labels.Labels 
 }
 
 // appender returns an appender for ingested samples from the target.
-func appender(app storage.Appender, limit int) storage.Appender {
+func appender(app storage.Appender, limit, bucketLimit int) storage.Appender {
 	app = &timeLimitAppender{
 		Appender: app,
 		maxTime:  timestamp.FromTime(time.Now().Add(maxAheadTime)),
@@ -741,6 +754,13 @@ func appender(app storage.Appender, limit int) storage.Appender {
 		app = &limitAppender{
 			Appender: app,
 			limit:    limit,
+		}
+	}
+
+	if bucketLimit > 0 {
+		app = &bucketLimitAppender{
+			Appender: app,
+			limit:    bucketLimit,
 		}
 	}
 	return app
@@ -871,6 +891,7 @@ type scrapeLoop struct {
 	forcedErr       error
 	forcedErrMtx    sync.Mutex
 	sampleLimit     int
+	bucketLimit     int
 	labelLimits     *labelLimits
 	interval        time.Duration
 	timeout         time.Duration
@@ -1150,6 +1171,7 @@ func newScrapeLoop(ctx context.Context,
 	jitterSeed uint64,
 	honorTimestamps bool,
 	sampleLimit int,
+	bucketLimit int,
 	labelLimits *labelLimits,
 	interval time.Duration,
 	timeout time.Duration,
@@ -1193,6 +1215,7 @@ func newScrapeLoop(ctx context.Context,
 		appenderCtx:         appenderCtx,
 		honorTimestamps:     honorTimestamps,
 		sampleLimit:         sampleLimit,
+		bucketLimit:         bucketLimit,
 		labelLimits:         labelLimits,
 		interval:            interval,
 		timeout:             timeout,
@@ -1460,10 +1483,11 @@ func (sl *scrapeLoop) getCache() *scrapeCache {
 }
 
 type appendErrors struct {
-	numOutOfOrder         int
-	numDuplicates         int
-	numOutOfBounds        int
-	numExemplarOutOfOrder int
+	numOutOfOrder           int
+	numDuplicates           int
+	numOutOfBounds          int
+	numExemplarOutOfOrder   int
+	numHistogramBucketLimit int
 }
 
 func (sl *scrapeLoop) append(app storage.Appender, b []byte, contentType string, ts time.Time) (total, added, seriesAdded int, err error) {
@@ -1508,7 +1532,7 @@ func (sl *scrapeLoop) append(app storage.Appender, b []byte, contentType string,
 	}
 
 	// Take an appender with limits.
-	app = appender(app, sl.sampleLimit)
+	app = appender(app, sl.sampleLimit, sl.bucketLimit)
 
 	defer func() {
 		if err != nil {
@@ -1691,6 +1715,9 @@ loop:
 	if appErrs.numExemplarOutOfOrder > 0 {
 		level.Warn(sl.l).Log("msg", "Error on ingesting out-of-order exemplars", "num_dropped", appErrs.numExemplarOutOfOrder)
 	}
+	if appErrs.numHistogramBucketLimit > 0 {
+		level.Warn(sl.l).Log("msg", "Error on ingesting native histograms that exceeded bucket limit", "num_dropped", appErrs.numHistogramBucketLimit)
+	}
 	if err == nil {
 		sl.cache.forEachStale(func(lset labels.Labels) bool {
 			// Series no longer exposed, mark it stale.
@@ -1732,6 +1759,11 @@ func (sl *scrapeLoop) checkAddError(ce *cacheEntry, met []byte, tp *int64, err e
 		appErrs.numOutOfBounds++
 		level.Debug(sl.l).Log("msg", "Out of bounds metric", "series", string(met))
 		targetScrapeSampleOutOfBounds.Inc()
+		return false, nil
+	case storage.ErrHistogramBucketLimit:
+		appErrs.numHistogramBucketLimit++
+		level.Debug(sl.l).Log("msg", "Exceeded bucket limit for native histograms", "series", string(met))
+		targetScrapeNativeHistogramBucketLimit.Inc()
 		return false, nil
 	case errSampleLimit:
 		// Keep on parsing output if we hit the limit, so we report the correct

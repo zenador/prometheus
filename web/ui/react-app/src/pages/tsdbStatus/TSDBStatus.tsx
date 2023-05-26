@@ -13,6 +13,7 @@ interface Stats {
 
 interface HeadStats {
   numSeries: number;
+  numChunks: number;
   numLabelPairs: number;
   chunkCount: number;
   minTime: number;
@@ -44,9 +45,10 @@ export const TSDBStatusContent: FC<TSDBMap> = ({
       return `Error parsing time (${unix})`;
     }
   };
-  const { chunkCount, numSeries, numLabelPairs, minTime, maxTime } = headStats;
+  const { chunkCount, numChunks, numSeries, numLabelPairs, minTime, maxTime } = headStats;
   const stats = [
     { header: 'Number of Series', value: numSeries },
+    { header: 'Number of Chunks 2', value: numChunks },
     { header: 'Number of Chunks', value: chunkCount },
     { header: 'Number of Label Pairs', value: numLabelPairs },
     { header: 'Current Min Time', value: `${unixToTime(minTime)}` },

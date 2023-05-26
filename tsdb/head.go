@@ -1323,6 +1323,7 @@ func (h *Head) truncateSeriesAndChunkDiskMapper(caller string) error {
 
 type Stats struct {
 	NumSeries         uint64
+	NumChunks         uint64
 	MinTime, MaxTime  int64
 	IndexPostingStats *index.PostingsStats
 }
@@ -1332,6 +1333,7 @@ type Stats struct {
 func (h *Head) Stats(statsByLabelName string, limit int) *Stats {
 	return &Stats{
 		NumSeries:         h.NumSeries(),
+		NumChunks:         h.NumChunks(),
 		MaxTime:           h.MaxTime(),
 		MinTime:           h.MinTime(),
 		IndexPostingStats: h.PostingsCardinalityStats(statsByLabelName, limit),

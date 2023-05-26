@@ -1447,6 +1447,7 @@ type TSDBStat struct {
 // HeadStats has information about the TSDB head.
 type HeadStats struct {
 	NumSeries     uint64 `json:"numSeries"`
+	NumChunks     uint64 `json:"NumChunks"`
 	NumLabelPairs int    `json:"numLabelPairs"`
 	ChunkCount    int64  `json:"chunkCount"`
 	MinTime       int64  `json:"minTime"`
@@ -1501,6 +1502,7 @@ func (api *API) serveTSDBStatus(r *http.Request) apiFuncResult {
 	return apiFuncResult{TSDBStatus{
 		HeadStats: HeadStats{
 			NumSeries:     s.NumSeries,
+			NumChunks:     s.NumChunks,
 			ChunkCount:    chunkCount,
 			MinTime:       s.MinTime,
 			MaxTime:       s.MaxTime,

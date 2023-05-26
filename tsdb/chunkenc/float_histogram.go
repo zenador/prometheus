@@ -80,6 +80,17 @@ func (c *FloatHistogramChunk) Layout() (
 	return readHistogramChunkLayout(&b)
 }
 
+func (c *FloatHistogramChunk) CountBuckets() int {
+	if c.NumSamples() == 0 {
+		return 0
+	}
+	_, _, negativeSpans, positiveSpans, err := c.Layout()
+	if err != nil {
+		return 0
+	}
+	return countSpans(negativeSpans) + countSpans(positiveSpans)
+}
+
 // SetCounterResetHeader sets the counter reset header.
 func (c *FloatHistogramChunk) SetCounterResetHeader(h CounterResetHeader) {
 	setCounterResetHeader(h, c.Bytes())

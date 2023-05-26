@@ -431,9 +431,13 @@ func analyzeBlock(path, blockID string, limit int, runExtended bool) error {
 
 	meta := block.Meta()
 	fmt.Printf("Block ID: %s\n", meta.ULID)
+	fmt.Printf("Time range: %v to %v\n", getFormatedTime(meta.MinTime, true), getFormatedTime(meta.MaxTime, true))
 	// Presume 1ms resolution that Prometheus uses.
 	fmt.Printf("Duration: %s\n", (time.Duration(meta.MaxTime-meta.MinTime) * 1e6).String())
 	fmt.Printf("Series: %d\n", meta.Stats.NumSeries)
+	fmt.Printf("Chunks: %d\n", meta.Stats.NumChunks)
+	fmt.Printf("Samples: %d\n", meta.Stats.NumSamples)
+	fmt.Printf("Size: %v\n", getFormatedBytes(block.Size(), true))
 	ir, err := block.Index()
 	if err != nil {
 		return err
@@ -586,7 +590,16 @@ func analyzeCompaction(block tsdb.BlockReader, indexr tsdb.IndexReader) (err err
 		err = tsdb_errors.NewMulti(err, chunkr.Close()).Err()
 	}()
 
-	const maxSamplesPerChunk = 120
+	countXor := 0
+	countHisto := 0
+	countFloatHisto := 0
+	numSamplesXor := 0
+	numSamplesHisto := 0
+	numSamplesFloatHisto := 0
+	bucketsHisto := 0
+	bucketsFloatHisto := 0
+
+	const maxSamplesPerChunk = 120 // TODO: update this to use the flag
 	nBuckets := 10
 	histogram := make([]int, nBuckets)
 	totalChunks := 0
@@ -603,11 +616,28 @@ func analyzeCompaction(block tsdb.BlockReader, indexr tsdb.IndexReader) (err err
 			if err != nil {
 				return err
 			}
-			chunkSize := math.Min(float64(chk.NumSamples()), maxSamplesPerChunk)
+			numSamples := chk.NumSamples()
+			chunkSize := math.Min(float64(numSamples), maxSamplesPerChunk)
 			// Calculate the bucket for the chunk and increment it in the histogram.
 			bucket := int(math.Ceil(float64(nBuckets)*chunkSize/maxSamplesPerChunk)) - 1
 			histogram[bucket]++
 			totalChunks++
+
+			switch chk.Encoding() {
+			case chunkenc.EncXOR:
+				countXor++
+				numSamplesXor += numSamples
+			case chunkenc.EncHistogram:
+				countHisto++
+				numSamplesHisto += numSamples
+				bucketsHisto += chk.(*chunkenc.HistogramChunk).CountBuckets()
+			case chunkenc.EncFloatHistogram:
+				countFloatHisto++
+				numSamplesFloatHisto += numSamples
+				bucketsFloatHisto += chk.(*chunkenc.FloatHistogramChunk).CountBuckets()
+			default:
+				panic(fmt.Sprintf("unknown chunk encoding: %v", chk.Encoding()))
+			}
 		}
 	}
 
@@ -622,6 +652,19 @@ func analyzeCompaction(block tsdb.BlockReader, indexr tsdb.IndexReader) (err err
 		}
 		fmt.Println()
 	}
+
+	fmt.Printf("\nChunks breakdown:\n")
+	fmt.Printf("\nCount by Type:\n")
+	fmt.Printf("Floats: %d\n", countXor)
+	fmt.Printf("Histograms: %d\n", countHisto)
+	fmt.Printf("Float Histograms: %d\n", countFloatHisto)
+	fmt.Printf("\nNum of Samples by Type:\n")
+	fmt.Printf("Floats: %d\n", numSamplesXor)
+	fmt.Printf("Histograms: %d\n", numSamplesHisto)
+	fmt.Printf("Float Histograms: %d\n", numSamplesFloatHisto)
+	fmt.Printf("\nNum of Buckets by Type:\n")
+	fmt.Printf("Histograms: %d\n", bucketsHisto)
+	fmt.Printf("Float Histograms: %d\n", bucketsFloatHisto)
 
 	return nil
 }

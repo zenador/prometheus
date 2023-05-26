@@ -73,6 +73,17 @@ func (c *HistogramChunk) Layout() (
 	return readHistogramChunkLayout(&b)
 }
 
+func (c *HistogramChunk) CountBuckets() int {
+	if c.NumSamples() == 0 {
+		return 0
+	}
+	_, _, negativeSpans, positiveSpans, err := c.Layout()
+	if err != nil {
+		return 0
+	}
+	return countSpans(negativeSpans) + countSpans(positiveSpans)
+}
+
 // CounterResetHeader defines the first 2 bits of the chunk header.
 type CounterResetHeader byte
 

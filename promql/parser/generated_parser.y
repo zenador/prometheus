@@ -22,7 +22,6 @@ import (
         "github.com/prometheus/prometheus/model/labels"
         "github.com/prometheus/prometheus/model/value"
         "github.com/prometheus/prometheus/model/histogram"
-	"github.com/prometheus/prometheus/promql/parser/posrange"
 )
 
 %}
@@ -200,7 +199,7 @@ start           :
                         { yylex.(*parser).generatedParserResult = $2 }
                 | START_SERIES_DESCRIPTION series_description
                 | START_EXPRESSION /* empty */ EOF
-                        { yylex.(*parser).addParseErrf(posrange.PositionRange{}, "no expression found in input")}
+                        { yylex.(*parser).addParseErrf(PositionRange{}, "no expression found in input")}
                 | START_EXPRESSION expr
                         { yylex.(*parser).generatedParserResult = $2 }
                 | START_METRIC_SELECTOR vector_selector
@@ -372,7 +371,7 @@ function_call   : IDENTIFIER function_call_body
                         $$ = &Call{
                                 Func: fn,
                                 Args: $2.(Expressions),
-                                PosRange: posrange.PositionRange{
+                                PosRange: PositionRange{
                                         Start: $1.Pos,
                                         End:   yylex.(*parser).lastClosing,
                                 },

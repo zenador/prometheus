@@ -24,7 +24,6 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
-	"github.com/prometheus/prometheus/util/annotations"
 	"github.com/prometheus/prometheus/util/teststorage"
 )
 
@@ -179,9 +178,8 @@ func TestFanoutErrors(t *testing.T) {
 
 			if tc.warning != nil {
 				require.Greater(t, len(ss.Warnings()), 0, "warnings expected")
-				w := ss.Warnings()
-				require.Error(t, w.AsErrors()[0])
-				require.Equal(t, tc.warning.Error(), w.AsStrings("", 0)[0])
+				require.Error(t, ss.Warnings()[0])
+				require.Equal(t, tc.warning.Error(), ss.Warnings()[0].Error())
 			}
 		})
 		t.Run("chunks", func(t *testing.T) {
@@ -205,9 +203,8 @@ func TestFanoutErrors(t *testing.T) {
 
 			if tc.warning != nil {
 				require.Greater(t, len(ss.Warnings()), 0, "warnings expected")
-				w := ss.Warnings()
-				require.Error(t, w.AsErrors()[0])
-				require.Equal(t, tc.warning.Error(), w.AsStrings("", 0)[0])
+				require.Error(t, ss.Warnings()[0])
+				require.Equal(t, tc.warning.Error(), ss.Warnings()[0].Error())
 			}
 		})
 	}
@@ -236,11 +233,11 @@ func (errQuerier) Select(context.Context, bool, *storage.SelectHints, ...*labels
 	return storage.ErrSeriesSet(errSelect)
 }
 
-func (errQuerier) LabelValues(context.Context, string, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (errQuerier) LabelValues(context.Context, string, ...*labels.Matcher) ([]string, storage.Warnings, error) {
 	return nil, nil, errors.New("label values error")
 }
 
-func (errQuerier) LabelNames(context.Context, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (errQuerier) LabelNames(context.Context, ...*labels.Matcher) ([]string, storage.Warnings, error) {
 	return nil, nil, errors.New("label names error")
 }
 

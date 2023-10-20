@@ -17,7 +17,6 @@ import (
 	"context"
 
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/util/annotations"
 )
 
 type noopQuerier struct{}
@@ -31,11 +30,11 @@ func (noopQuerier) Select(context.Context, bool, *SelectHints, ...*labels.Matche
 	return NoopSeriesSet()
 }
 
-func (noopQuerier) LabelValues(context.Context, string, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (noopQuerier) LabelValues(context.Context, string, ...*labels.Matcher) ([]string, Warnings, error) {
 	return nil, nil, nil
 }
 
-func (noopQuerier) LabelNames(context.Context, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (noopQuerier) LabelNames(context.Context, ...*labels.Matcher) ([]string, Warnings, error) {
 	return nil, nil, nil
 }
 
@@ -54,11 +53,11 @@ func (noopChunkQuerier) Select(context.Context, bool, *SelectHints, ...*labels.M
 	return NoopChunkedSeriesSet()
 }
 
-func (noopChunkQuerier) LabelValues(context.Context, string, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (noopChunkQuerier) LabelValues(context.Context, string, ...*labels.Matcher) ([]string, Warnings, error) {
 	return nil, nil, nil
 }
 
-func (noopChunkQuerier) LabelNames(context.Context, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (noopChunkQuerier) LabelNames(context.Context, ...*labels.Matcher) ([]string, Warnings, error) {
 	return nil, nil, nil
 }
 
@@ -79,7 +78,7 @@ func (noopSeriesSet) At() Series { return nil }
 
 func (noopSeriesSet) Err() error { return nil }
 
-func (noopSeriesSet) Warnings() annotations.Annotations { return nil }
+func (noopSeriesSet) Warnings() Warnings { return nil }
 
 type noopChunkedSeriesSet struct{}
 
@@ -94,4 +93,4 @@ func (noopChunkedSeriesSet) At() ChunkSeries { return nil }
 
 func (noopChunkedSeriesSet) Err() error { return nil }
 
-func (noopChunkedSeriesSet) Warnings() annotations.Annotations { return nil }
+func (noopChunkedSeriesSet) Warnings() Warnings { return nil }

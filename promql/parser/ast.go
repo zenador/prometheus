@@ -20,8 +20,6 @@ import (
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
-
-	"github.com/prometheus/prometheus/promql/parser/posrange"
 )
 
 // Node is a generic interface for all nodes in an AST.
@@ -47,7 +45,7 @@ type Node interface {
 	Pretty(level int) string
 
 	// PositionRange returns the position of the AST Node in the query string.
-	PositionRange() posrange.PositionRange
+	PositionRange() PositionRange
 }
 
 // Statement is a generic interface for all statements.
@@ -96,7 +94,7 @@ type AggregateExpr struct {
 	Param    Expr     // Parameter used by some aggregators.
 	Grouping []string // The labels by which to group the Vector.
 	Without  bool     // Whether to drop the given labels rather than keep them.
-	PosRange posrange.PositionRange
+	PosRange PositionRange
 }
 
 // BinaryExpr represents a binary expression between two child expressions.
@@ -117,7 +115,7 @@ type Call struct {
 	Func *Function   // The function that was called.
 	Args Expressions // Arguments used in the call.
 
-	PosRange posrange.PositionRange
+	PosRange PositionRange
 }
 
 // MatrixSelector represents a Matrix selection.
@@ -127,7 +125,7 @@ type MatrixSelector struct {
 	VectorSelector Expr
 	Range          time.Duration
 
-	EndPos posrange.Pos
+	EndPos Pos
 }
 
 // SubqueryExpr represents a subquery.
@@ -145,27 +143,27 @@ type SubqueryExpr struct {
 	StartOrEnd ItemType // Set when @ is used with start() or end()
 	Step       time.Duration
 
-	EndPos posrange.Pos
+	EndPos Pos
 }
 
 // NumberLiteral represents a number.
 type NumberLiteral struct {
 	Val float64
 
-	PosRange posrange.PositionRange
+	PosRange PositionRange
 }
 
 // ParenExpr wraps an expression so it cannot be disassembled as a consequence
 // of operator precedence.
 type ParenExpr struct {
 	Expr     Expr
-	PosRange posrange.PositionRange
+	PosRange PositionRange
 }
 
 // StringLiteral represents a string.
 type StringLiteral struct {
 	Val      string
-	PosRange posrange.PositionRange
+	PosRange PositionRange
 }
 
 // UnaryExpr represents a unary operation on another expression.
@@ -174,7 +172,7 @@ type UnaryExpr struct {
 	Op   ItemType
 	Expr Expr
 
-	StartPos posrange.Pos
+	StartPos Pos
 }
 
 // StepInvariantExpr represents a query which evaluates to the same result
@@ -186,9 +184,7 @@ type StepInvariantExpr struct {
 
 func (e *StepInvariantExpr) String() string { return e.Expr.String() }
 
-func (e *StepInvariantExpr) PositionRange() posrange.PositionRange {
-	return e.Expr.PositionRange()
-}
+func (e *StepInvariantExpr) PositionRange() PositionRange { return e.Expr.PositionRange() }
 
 // VectorSelector represents a Vector selection.
 type VectorSelector struct {
@@ -208,7 +204,7 @@ type VectorSelector struct {
 	UnexpandedSeriesSet storage.SeriesSet
 	Series              []storage.Series
 
-	PosRange posrange.PositionRange
+	PosRange PositionRange
 }
 
 // TestStmt is an internal helper statement that allows execution
@@ -219,8 +215,8 @@ func (TestStmt) String() string      { return "test statement" }
 func (TestStmt) PromQLStmt()         {}
 func (t TestStmt) Pretty(int) string { return t.String() }
 
-func (TestStmt) PositionRange() posrange.PositionRange {
-	return posrange.PositionRange{
+func (TestStmt) PositionRange() PositionRange {
+	return PositionRange{
 		Start: -1,
 		End:   -1,
 	}
@@ -409,11 +405,17 @@ func Children(node Node) []Node {
 	}
 }
 
+// PositionRange describes a position in the input string of the parser.
+type PositionRange struct {
+	Start Pos
+	End   Pos
+}
+
 // mergeRanges is a helper function to merge the PositionRanges of two Nodes.
 // Note that the arguments must be in the same order as they
 // occur in the input string.
-func mergeRanges(first, last Node) posrange.PositionRange {
-	return posrange.PositionRange{
+func mergeRanges(first, last Node) PositionRange {
+	return PositionRange{
 		Start: first.PositionRange().Start,
 		End:   last.PositionRange().End,
 	}
@@ -421,33 +423,33 @@ func mergeRanges(first, last Node) posrange.PositionRange {
 
 // Item implements the Node interface.
 // This makes it possible to call mergeRanges on them.
-func (i *Item) PositionRange() posrange.PositionRange {
-	return posrange.PositionRange{
+func (i *Item) PositionRange() PositionRange {
+	return PositionRange{
 		Start: i.Pos,
-		End:   i.Pos + posrange.Pos(len(i.Val)),
+		End:   i.Pos + Pos(len(i.Val)),
 	}
 }
 
-func (e *AggregateExpr) PositionRange() posrange.PositionRange {
+func (e *AggregateExpr) PositionRange() PositionRange {
 	return e.PosRange
 }
 
-func (e *BinaryExpr) PositionRange() posrange.PositionRange {
+func (e *BinaryExpr) PositionRange() PositionRange {
 	return mergeRanges(e.LHS, e.RHS)
 }
 
-func (e *Call) PositionRange() posrange.PositionRange {
+func (e *Call) PositionRange() PositionRange {
 	return e.PosRange
 }
 
-func (e *EvalStmt) PositionRange() posrange.PositionRange {
+func (e *EvalStmt) PositionRange() PositionRange {
 	return e.Expr.PositionRange()
 }
 
-func (e Expressions) PositionRange() posrange.PositionRange {
+func (e Expressions) PositionRange() PositionRange {
 	if len(e) == 0 {
 		// Position undefined.
-		return posrange.PositionRange{
+		return PositionRange{
 			Start: -1,
 			End:   -1,
 		}
@@ -455,39 +457,39 @@ func (e Expressions) PositionRange() posrange.PositionRange {
 	return mergeRanges(e[0], e[len(e)-1])
 }
 
-func (e *MatrixSelector) PositionRange() posrange.PositionRange {
-	return posrange.PositionRange{
+func (e *MatrixSelector) PositionRange() PositionRange {
+	return PositionRange{
 		Start: e.VectorSelector.PositionRange().Start,
 		End:   e.EndPos,
 	}
 }
 
-func (e *SubqueryExpr) PositionRange() posrange.PositionRange {
-	return posrange.PositionRange{
+func (e *SubqueryExpr) PositionRange() PositionRange {
+	return PositionRange{
 		Start: e.Expr.PositionRange().Start,
 		End:   e.EndPos,
 	}
 }
 
-func (e *NumberLiteral) PositionRange() posrange.PositionRange {
+func (e *NumberLiteral) PositionRange() PositionRange {
 	return e.PosRange
 }
 
-func (e *ParenExpr) PositionRange() posrange.PositionRange {
+func (e *ParenExpr) PositionRange() PositionRange {
 	return e.PosRange
 }
 
-func (e *StringLiteral) PositionRange() posrange.PositionRange {
+func (e *StringLiteral) PositionRange() PositionRange {
 	return e.PosRange
 }
 
-func (e *UnaryExpr) PositionRange() posrange.PositionRange {
-	return posrange.PositionRange{
+func (e *UnaryExpr) PositionRange() PositionRange {
+	return PositionRange{
 		Start: e.StartPos,
 		End:   e.Expr.PositionRange().End,
 	}
 }
 
-func (e *VectorSelector) PositionRange() posrange.PositionRange {
+func (e *VectorSelector) PositionRange() PositionRange {
 	return e.PosRange
 }

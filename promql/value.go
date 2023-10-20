@@ -24,8 +24,8 @@ import (
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
+	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
-	"github.com/prometheus/prometheus/util/annotations"
 )
 
 func (Matrix) Type() parser.ValueType { return parser.ValueTypeMatrix }
@@ -338,7 +338,7 @@ func (m Matrix) ContainsSameLabelset() bool {
 type Result struct {
 	Err      error
 	Value    parser.Value
-	Warnings annotations.Annotations
+	Warnings storage.Warnings
 }
 
 // Vector returns a Vector if the result value is one. An error is returned if

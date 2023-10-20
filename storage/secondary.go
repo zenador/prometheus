@@ -18,7 +18,6 @@ import (
 	"sync"
 
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/util/annotations"
 )
 
 // secondaryQuerier is a wrapper that allows a querier to be treated in a best effort manner.
@@ -49,18 +48,18 @@ func newSecondaryQuerierFromChunk(cq ChunkQuerier) genericQuerier {
 	return &secondaryQuerier{genericQuerier: newGenericQuerierFromChunk(cq)}
 }
 
-func (s *secondaryQuerier) LabelValues(ctx context.Context, name string, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (s *secondaryQuerier) LabelValues(ctx context.Context, name string, matchers ...*labels.Matcher) ([]string, Warnings, error) {
 	vals, w, err := s.genericQuerier.LabelValues(ctx, name, matchers...)
 	if err != nil {
-		return nil, w.Add(err), nil
+		return nil, append([]error{err}, w...), nil
 	}
 	return vals, w, nil
 }
 
-func (s *secondaryQuerier) LabelNames(ctx context.Context, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (s *secondaryQuerier) LabelNames(ctx context.Context, matchers ...*labels.Matcher) ([]string, Warnings, error) {
 	names, w, err := s.genericQuerier.LabelNames(ctx, matchers...)
 	if err != nil {
-		return nil, w.Add(err), nil
+		return nil, append([]error{err}, w...), nil
 	}
 	return names, w, nil
 }
@@ -84,7 +83,7 @@ func (s *secondaryQuerier) Select(ctx context.Context, sortSeries bool, hints *S
 				if err := set.Err(); err != nil {
 					// One of the sets failed, ensure current one returning errors as warnings, and rest of the sets return nothing.
 					// (All or nothing logic).
-					s.asyncSets[curr] = warningsOnlySeriesSet(ws.Add(err))
+					s.asyncSets[curr] = warningsOnlySeriesSet(append([]error{err}, ws...))
 					for i := range s.asyncSets {
 						if curr == i {
 							continue

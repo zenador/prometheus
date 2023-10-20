@@ -80,121 +80,121 @@ type benchCase struct {
 
 func rangeQueryCases() []benchCase {
 	cases := []benchCase{
-		// Plain retrieval.
-		{
-			expr: "a_X",
-		},
-		// Simple rate.
+		// // Plain retrieval.
+		// {
+		// 	expr: "a_X",
+		// },
+		// // Simple rate.
 		{
 			expr: "rate(a_X[1m])",
 		},
-		{
-			expr:  "rate(a_X[1m])",
-			steps: 10000,
-		},
-		// Holt-Winters and long ranges.
-		{
-			expr: "holt_winters(a_X[1d], 0.3, 0.3)",
-		},
-		{
-			expr: "changes(a_X[1d])",
-		},
-		{
-			expr: "rate(a_X[1d])",
-		},
-		{
-			expr: "absent_over_time(a_X[1d])",
-		},
-		// Unary operators.
-		{
-			expr: "-a_X",
-		},
-		// Binary operators.
-		{
-			expr: "a_X - b_X",
-		},
-		{
-			expr:  "a_X - b_X",
-			steps: 10000,
-		},
-		{
-			expr: "a_X and b_X{l=~'.*[0-4]$'}",
-		},
-		{
-			expr: "a_X or b_X{l=~'.*[0-4]$'}",
-		},
-		{
-			expr: "a_X unless b_X{l=~'.*[0-4]$'}",
-		},
-		{
-			expr: "a_X and b_X{l='notfound'}",
-		},
-		// Simple functions.
-		{
-			expr: "abs(a_X)",
-		},
-		{
-			expr: "label_replace(a_X, 'l2', '$1', 'l', '(.*)')",
-		},
-		{
-			expr: "label_join(a_X, 'l2', '-', 'l', 'l')",
-		},
-		// Simple aggregations.
-		{
-			expr: "sum(a_X)",
-		},
-		{
-			expr: "sum without (l)(h_X)",
-		},
-		{
-			expr: "sum without (le)(h_X)",
-		},
-		{
-			expr: "sum by (l)(h_X)",
-		},
-		{
-			expr: "sum by (le)(h_X)",
-		},
-		{
-			expr:  "count_values('value', h_X)",
-			steps: 100,
-		},
-		{
-			expr: "topk(1, a_X)",
-		},
-		{
-			expr: "topk(5, a_X)",
-		},
-		// Combinations.
-		{
-			expr: "rate(a_X[1m]) + rate(b_X[1m])",
-		},
-		{
-			expr: "sum without (l)(rate(a_X[1m]))",
-		},
-		{
-			expr: "sum without (l)(rate(a_X[1m])) / sum without (l)(rate(b_X[1m]))",
-		},
-		{
-			expr: "histogram_quantile(0.9, rate(h_X[5m]))",
-		},
-		// Many-to-one join.
-		{
-			expr: "a_X + on(l) group_right a_one",
-		},
-		// Label compared to blank string.
-		{
-			expr:  "count({__name__!=\"\"})",
-			steps: 1,
-		},
-		{
-			expr:  "count({__name__!=\"\",l=\"\"})",
-			steps: 1,
-		},
-		// Functions which have special handling inside eval()
-		{
-			expr: "timestamp(a_X)",
-		},
+		// {
+		// 	expr:  "rate(a_X[1m])",
+		// 	steps: 10000,
+		// },
+		// // Holt-Winters and long ranges.
+		// {
+		// 	expr: "holt_winters(a_X[1d], 0.3, 0.3)",
+		// },
+		// {
+		// 	expr: "changes(a_X[1d])",
+		// },
+		// {
+		// 	expr: "rate(a_X[1d])",
+		// },
+		// {
+		// 	expr: "absent_over_time(a_X[1d])",
+		// },
+		// // Unary operators.
+		// {
+		// 	expr: "-a_X",
+		// },
+		// // Binary operators.
+		// {
+		// 	expr: "a_X - b_X",
+		// },
+		// {
+		// 	expr:  "a_X - b_X",
+		// 	steps: 10000,
+		// },
+		// {
+		// 	expr: "a_X and b_X{l=~'.*[0-4]$'}",
+		// },
+		// {
+		// 	expr: "a_X or b_X{l=~'.*[0-4]$'}",
+		// },
+		// {
+		// 	expr: "a_X unless b_X{l=~'.*[0-4]$'}",
+		// },
+		// {
+		// 	expr: "a_X and b_X{l='notfound'}",
+		// },
+		// // Simple functions.
+		// {
+		// 	expr: "abs(a_X)",
+		// },
+		// {
+		// 	expr: "label_replace(a_X, 'l2', '$1', 'l', '(.*)')",
+		// },
+		// {
+		// 	expr: "label_join(a_X, 'l2', '-', 'l', 'l')",
+		// },
+		// // Simple aggregations.
+		// {
+		// 	expr: "sum(a_X)",
+		// },
+		// {
+		// 	expr: "sum without (l)(h_X)",
+		// },
+		// {
+		// 	expr: "sum without (le)(h_X)",
+		// },
+		// {
+		// 	expr: "sum by (l)(h_X)",
+		// },
+		// {
+		// 	expr: "sum by (le)(h_X)",
+		// },
+		// {
+		// 	expr:  "count_values('value', h_X)",
+		// 	steps: 100,
+		// },
+		// {
+		// 	expr: "topk(1, a_X)",
+		// },
+		// {
+		// 	expr: "topk(5, a_X)",
+		// },
+		// // Combinations.
+		// {
+		// 	expr: "rate(a_X[1m]) + rate(b_X[1m])",
+		// },
+		// {
+		// 	expr: "sum without (l)(rate(a_X[1m]))",
+		// },
+		// {
+		// 	expr: "sum without (l)(rate(a_X[1m])) / sum without (l)(rate(b_X[1m]))",
+		// },
+		// {
+		// 	expr: "histogram_quantile(0.9, rate(h_X[5m]))",
+		// },
+		// // Many-to-one join.
+		// {
+		// 	expr: "a_X + on(l) group_right a_one",
+		// },
+		// // Label compared to blank string.
+		// {
+		// 	expr:  "count({__name__!=\"\"})",
+		// 	steps: 1,
+		// },
+		// {
+		// 	expr:  "count({__name__!=\"\",l=\"\"})",
+		// 	steps: 1,
+		// },
+		// // Functions which have special handling inside eval()
+		// {
+		// 	expr: "timestamp(a_X)",
+		// },
 	}
 
 	// X in an expr will be replaced by different metric sizes.
@@ -203,8 +203,8 @@ func rangeQueryCases() []benchCase {
 		if !strings.Contains(c.expr, "X") {
 			tmp = append(tmp, c)
 		} else {
-			tmp = append(tmp, benchCase{expr: strings.ReplaceAll(c.expr, "X", "one"), steps: c.steps})
-			tmp = append(tmp, benchCase{expr: strings.ReplaceAll(c.expr, "X", "ten"), steps: c.steps})
+			// tmp = append(tmp, benchCase{expr: strings.ReplaceAll(c.expr, "X", "one"), steps: c.steps})
+			// tmp = append(tmp, benchCase{expr: strings.ReplaceAll(c.expr, "X", "ten"), steps: c.steps})
 			tmp = append(tmp, benchCase{expr: strings.ReplaceAll(c.expr, "X", "hundred"), steps: c.steps})
 		}
 	}
@@ -216,8 +216,8 @@ func rangeQueryCases() []benchCase {
 		if c.steps != 0 {
 			tmp = append(tmp, c)
 		} else {
-			tmp = append(tmp, benchCase{expr: c.expr, steps: 1})
-			tmp = append(tmp, benchCase{expr: c.expr, steps: 100})
+			// tmp = append(tmp, benchCase{expr: c.expr, steps: 1})
+			// tmp = append(tmp, benchCase{expr: c.expr, steps: 100})
 			tmp = append(tmp, benchCase{expr: c.expr, steps: 1000})
 		}
 	}

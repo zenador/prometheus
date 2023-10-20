@@ -71,17 +71,15 @@ type metricWithBuckets struct {
 // If q<0, -Inf is returned.
 //
 // If q>1, +Inf is returned.
-//
-// We also return a bool to indicate if monotonicity needed to be forced.
-func bucketQuantile(q float64, buckets buckets) (float64, bool) {
+func bucketQuantile(q float64, buckets buckets) float64 {
 	if math.IsNaN(q) {
-		return math.NaN(), false
+		return math.NaN()
 	}
 	if q < 0 {
-		return math.Inf(-1), false
+		return math.Inf(-1)
 	}
 	if q > 1 {
-		return math.Inf(+1), false
+		return math.Inf(+1)
 	}
 	slices.SortFunc(buckets, func(a, b bucket) int {
 		// We don't expect the bucket boundary to be a NaN.
@@ -94,27 +92,27 @@ func bucketQuantile(q float64, buckets buckets) (float64, bool) {
 		return 0
 	})
 	if !math.IsInf(buckets[len(buckets)-1].upperBound, +1) {
-		return math.NaN(), false
+		return math.NaN()
 	}
 
 	buckets = coalesceBuckets(buckets)
-	forcedMonotonic := ensureMonotonic(buckets)
+	ensureMonotonic(buckets)
 
 	if len(buckets) < 2 {
-		return math.NaN(), false
+		return math.NaN()
 	}
 	observations := buckets[len(buckets)-1].count
 	if observations == 0 {
-		return math.NaN(), false
+		return math.NaN()
 	}
 	rank := q * observations
 	b := sort.Search(len(buckets)-1, func(i int) bool { return buckets[i].count >= rank })
 
 	if b == len(buckets)-1 {
-		return buckets[len(buckets)-2].upperBound, forcedMonotonic
+		return buckets[len(buckets)-2].upperBound
 	}
 	if b == 0 && buckets[0].upperBound <= 0 {
-		return buckets[0].upperBound, forcedMonotonic
+		return buckets[0].upperBound
 	}
 	var (
 		bucketStart float64
@@ -126,7 +124,7 @@ func bucketQuantile(q float64, buckets buckets) (float64, bool) {
 		count -= buckets[b-1].count
 		rank -= buckets[b-1].count
 	}
-	return bucketStart + (bucketEnd-bucketStart)*(rank/count), forcedMonotonic
+	return bucketStart + (bucketEnd-bucketStart)*(rank/count)
 }
 
 // histogramQuantile calculates the quantile 'q' based on the given histogram.
@@ -372,11 +370,9 @@ func coalesceBuckets(buckets buckets) buckets {
 //
 // As a somewhat hacky solution until ingestion is atomic per scrape, we
 // calculate the "envelope" of the histogram buckets, essentially removing
-// any decreases in the count between successive buckets. We return a bool
-// to indicate if this monotonicity was forced or not.
+// any decreases in the count between successive buckets.
 
-func ensureMonotonic(buckets buckets) bool {
-	forced := false
+func ensureMonotonic(buckets buckets) {
 	max := buckets[0].count
 	for i := 1; i < len(buckets); i++ {
 		switch {
@@ -384,10 +380,8 @@ func ensureMonotonic(buckets buckets) bool {
 			max = buckets[i].count
 		case buckets[i].count < max:
 			buckets[i].count = max
-			forced = true
 		}
 	}
-	return forced
 }
 
 // quantile calculates the given quantile of a vector of samples.

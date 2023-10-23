@@ -15,6 +15,7 @@ package tsdb
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"unicode/utf8"
 
@@ -250,6 +251,20 @@ func (ce *CircularExemplarStorage) validateExemplar(key []byte, e exemplar.Exemp
 	}
 
 	if e.Ts < ce.exemplars[idx.newest].exemplar.Ts {
+		match := false
+		count := 0
+		matchCount := -1
+		for i := idx.oldest; i != noExemplar; i = ce.exemplars[i].next {
+			if ce.exemplars[i].exemplar.Equals(e) {
+				match = true
+				matchCount = count
+			}
+			count++
+		}
+		fmt.Printf("ooo appended %t match %t this %v matchCount %d count %d for %v\n", appended, match, e, matchCount, count, idx.seriesLabels)
+		if match {
+			return storage.ErrDuplicateExemplar
+		}
 		if appended {
 			ce.metrics.outOfOrderExemplars.Inc()
 		}

@@ -1728,6 +1728,9 @@ loop:
 		sort.Slice(exemplarQueue, func(i, j int) bool {
 			return exemplarQueue[i].Ts < exemplarQueue[j].Ts
 		})
+		if len(exemplarQueue) > 0 {
+			fmt.Printf("exemplarQueue for %v: %v\n", lset, exemplarQueue)
+		}
 		for _, e := range exemplarQueue {
 			_, exemplarErr := app.AppendExemplar(ref, lset, e)
 			exemplarErr = sl.checkAddExemplarError(exemplarErr, e, &appErrs)

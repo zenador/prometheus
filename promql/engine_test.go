@@ -15,11 +15,14 @@ package promql
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"os"
 	"sort"
+	"strconv"
 	"testing"
 	"time"
 
@@ -3150,6 +3153,114 @@ func TestRangeQuery(t *testing.T) {
 			require.Equal(t, c.Result, res.Value)
 		})
 	}
+}
+
+type JsonContents struct {
+	Status string
+	Data   JsonData
+}
+
+type JsonData struct {
+	ResultType string
+	Result     []JsonResult
+}
+
+type JsonResult struct {
+	Metric map[string]string
+	Values []Value
+}
+
+type Value struct {
+	ts    float64
+	float string
+}
+
+func (t *Value) UnmarshalJSON(b []byte) error {
+	a := []interface{}{&t.ts, &t.float}
+	return json.Unmarshal(b, &a)
+}
+
+func TestWeirdThing(t *testing.T) {
+	jsonFile, err := os.Open("/home/j/improbable_data.json")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer jsonFile.Close()
+
+	byteValue, _ := ioutil.ReadAll(jsonFile)
+
+	var result JsonContents
+	json.Unmarshal(byteValue, &result)
+
+	engine := newTestEngine()
+	tstorage := teststorage.New(t)
+	t.Cleanup(func() { tstorage.Close() })
+
+	seriesName := `audio_full_tick_times_bucket{cluster="eu-west4", pod=~"showcase-main-nightly-scale-te-skypark-p.*"}`
+	// seriesName := `audio_full_tick_times_bucket`
+
+	app := tstorage.Appender(context.Background())
+	for _, res := range result.Data.Result {
+		lbls := labels.FromMap(res.Metric)
+		// fmt.Println(lbls)
+		var ref storage.SeriesRef
+		for _, val := range res.Values {
+			f, err := strconv.ParseFloat(val.float, 64)
+			require.NoError(t, err)
+			// fmt.Println(int64(val.ts), f, ref)
+			ref, err = app.Append(ref, lbls, int64(val.ts*1000), f)
+			require.NoError(t, err)
+		}
+	}
+	require.NoError(t, app.Commit())
+
+	queryString := fmt.Sprintf("histogram_quantile(1, sum(rate(%s[1m])) by (le))", seriesName)
+	// queryString := fmt.Sprintf("sum(rate(%s[1m])) by (le)", seriesName)
+	// queryString := fmt.Sprintf("sum(%s)", seriesName)
+	fmt.Println(queryString)
+	// qry, err := engine.NewInstantQuery(context.Background(), tstorage, nil, queryString, timestamp.Time(1688967618))
+	qry, err := engine.NewRangeQuery(context.Background(), tstorage, nil, queryString, time.Unix(1688967498, 0), time.Unix(1688967618, 0), 15*time.Second)
+	// qry, err := engine.NewRangeQuery(context.Background(), tstorage, nil, queryString, timestamp.Time(1688967498000), timestamp.Time(1688967618000), 15*time.Second)
+	require.NoError(t, err)
+	res := qry.Exec(context.Background())
+	require.NoError(t, res.Err)
+	// vector, err := res.Vector()
+	vector, err := res.Matrix()
+	require.NoError(t, err)
+	fmt.Println(vector)
+	require.Len(t, vector, 1)
+	// require.Equal(t, expectedHistogram, actualHistogram)
+}
+
+func TestWeirdStuff(t *testing.T) {
+	engine := newTestEngine()
+	tstorage := teststorage.New(t)
+	t.Cleanup(func() { tstorage.Close() })
+
+	seriesName := "float_series"
+	lbls := labels.FromStrings("__name__", seriesName)
+
+	app := tstorage.Appender(context.Background())
+	startTs := 1688967498
+	for i, _ := range tsdbutil.GenerateTestHistograms(120) {
+		i := i
+		_, err := app.Append(0, lbls, int64((startTs+i)*1000), float64(i))
+		require.NoError(t, err)
+	}
+	require.NoError(t, app.Commit())
+
+	// queryString := fmt.Sprintf("rate(%s[1m])", seriesName)
+	queryString := fmt.Sprintf("%s", seriesName)
+	// qry, err := engine.NewInstantQuery(context.Background(), tstorage, nil, queryString, timestamp.Time(1688967510))
+	qry, err := engine.NewRangeQuery(context.Background(), tstorage, nil, queryString, timestamp.Time(1688967498000), timestamp.Time(1688967618000), 15*time.Second)
+	require.NoError(t, err)
+	res := qry.Exec(context.Background())
+	require.NoError(t, res.Err)
+	fmt.Println(res)
+	vector, err := res.Matrix()
+	require.NoError(t, err)
+	require.Len(t, vector, 1)
 }
 
 func TestNativeHistogramRate(t *testing.T) {

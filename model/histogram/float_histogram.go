@@ -103,7 +103,7 @@ func (h *FloatHistogram) CopyToSchema(targetSchema int32) *FloatHistogram {
 // String returns a string representation of the Histogram.
 func (h *FloatHistogram) String() string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "{count:%g, sum:%g", h.Count, h.Sum)
+	fmt.Fprintf(&sb, "{count:%g, sum:%g, schema:%d, zt:%g, zc:%g, pc:%v, pb:%v, nc:%v, nb:%v", h.Count, h.Sum, h.Schema, h.ZeroThreshold, h.ZeroCount, h.PositiveSpans, h.PositiveBuckets, h.NegativeSpans, h.NegativeBuckets)
 
 	var nBuckets []Bucket[float64]
 	for it := h.NegativeBucketIterator(); it.Next(); {

@@ -982,6 +982,8 @@ func funcHistogramCount(vals []parser.Value, args parser.Expressions, enh *EvalN
 		if sample.H == nil {
 			continue
 		}
+
+		fmt.Printf("UGH %v", sample.H)
 		enh.Out = append(enh.Out, Sample{
 			Metric: enh.DropMetricName(sample.Metric),
 			F:      sample.H.Count,

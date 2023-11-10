@@ -250,9 +250,10 @@ func (ce *CircularExemplarStorage) validateExemplar(key []byte, e exemplar.Exemp
 		return storage.ErrDuplicateExemplar
 	}
 
-	if e.Ts < ce.exemplars[idx.newest].exemplar.Ts {
+	if e.Ts <= ce.exemplars[idx.newest].exemplar.Ts {
 		match := false
 		count := 0
+		countNoTs := 0
 		matchCount := -1
 		for i := idx.oldest; i != noExemplar; i = ce.exemplars[i].next {
 			if ce.exemplars[i].exemplar.Equals(e) {
@@ -260,8 +261,11 @@ func (ce *CircularExemplarStorage) validateExemplar(key []byte, e exemplar.Exemp
 				matchCount = count
 			}
 			count++
+			if !ce.exemplars[i].exemplar.HasTs {
+				countNoTs++
+			}
 		}
-		fmt.Printf("ooo appended %t match %t this %v matchCount %d count %d for %v\n", appended, match, e, matchCount, count, idx.seriesLabels)
+		fmt.Printf("ooo appended %t match %t this %v matchCount %d count %d countNoTs %d for %v\n", appended, match, e, matchCount, count, countNoTs, idx.seriesLabels)
 		if match {
 			return storage.ErrDuplicateExemplar
 		}

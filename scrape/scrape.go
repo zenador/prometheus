@@ -1720,6 +1720,7 @@ loop:
 		var exemplarQueue []exemplar.Exemplar
 		for hasExemplar := p.Exemplar(&e); hasExemplar; hasExemplar = p.Exemplar(&e) {
 			if !e.HasTs {
+				fmt.Printf("NOTE exemplar %v has no timestamp, using sample timestamp %d\n", e, t)
 				e.Ts = t
 			}
 			exemplarQueue = append(exemplarQueue, e)
@@ -1729,7 +1730,7 @@ loop:
 			return exemplarQueue[i].Ts < exemplarQueue[j].Ts
 		})
 		if len(exemplarQueue) > 0 {
-			fmt.Printf("exemplarQueue for %v: %v\n", lset, exemplarQueue)
+			fmt.Printf("exemplarQueue of %d for %v: %v\n", len(exemplarQueue), lset, exemplarQueue)
 		}
 		for _, e := range exemplarQueue {
 			_, exemplarErr := app.AppendExemplar(ref, lset, e)

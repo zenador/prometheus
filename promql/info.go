@@ -422,7 +422,7 @@ func (ev *evaluator) combineWithInfoSeries(ctx context.Context, mat, infoMat Mat
 				}
 				ss.ts = ts
 			} else {
-				ss = seriesAndTimestamp{Series{Metric: sample.Metric}, ts}
+				ss = seriesAndTimestamp{Series{Metric: sample.Metric, DropName: sample.DropName}, ts}
 			}
 			addToSeries(&ss.Series, enh.Ts, sample.F, sample.H, numSteps)
 			seriess[h] = ss
@@ -495,9 +495,10 @@ func (ev *evaluator) combineWithInfoVector(base, info Vector, ignoreSeries map[u
 		if _, exists := ignoreSeries[hash]; exists {
 			// This series should not be enriched with info metric data labels.
 			enh.Out = append(enh.Out, Sample{
-				Metric: bs.Metric,
-				F:      bs.F,
-				H:      bs.H,
+				Metric:   bs.Metric,
+				F:        bs.F,
+				H:        bs.H,
+				DropName: bs.DropName,
 			})
 			continue
 		}
@@ -567,9 +568,10 @@ func (ev *evaluator) combineWithInfoVector(base, info Vector, ignoreSeries map[u
 		})
 
 		enh.Out = append(enh.Out, Sample{
-			Metric: enh.lb.Labels(),
-			F:      bs.F,
-			H:      bs.H,
+			Metric:   enh.lb.Labels(),
+			F:        bs.F,
+			H:        bs.H,
+			DropName: bs.DropName,
 		})
 	}
 	return enh.Out, nil

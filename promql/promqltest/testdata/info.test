@@ -277,14 +277,22 @@ eval range from 8m to 9m step 1m info(last_over_time(metric[5m:1m] offset 6m))
 
 # Modifiers in scalar-only subexpressions do not shift enrichment for the vector operand.
 # Reordering scalar-vector multiplication therefore produces the same current info labels.
+# The metric name stays dropped: info() only adds data labels and preserves the name-dropping
+# already implied by the arithmetic operation on its input.
 eval instant at 8m info(scalar(metric @ 120) * metric)
-    metric{instance="a", job="1", version="new"} 16
+    {instance="a", job="1", version="new"} 16
 
 eval instant at 8m info(metric * scalar(metric @ 120))
-    metric{instance="a", job="1", version="new"} 16
+    {instance="a", job="1", version="new"} 16
 
 eval instant at 8m info(scalar(metric offset 6m) * metric)
-    metric{instance="a", job="1", version="new"} 16
+    {instance="a", job="1", version="new"} 16
+
+# The name-dropping implied by the arithmetic operation is also preserved for series that pass
+# through unenriched because they are info series themselves.
+eval instant at 8m info(target_info * 0)
+    {instance="a", job="1", version="new"} 0
+    {instance="b", job="1", version="new"} 0
 
 # Different reference times on vector-producing operands are ambiguous. Preserve the previous
 # evaluation-time matching rather than applying the first selector's old info labels to both.
